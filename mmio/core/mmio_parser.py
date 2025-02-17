@@ -60,7 +60,9 @@ class MMIOParser(BaseModel):
                     continue
 
                 try:
-                    parsed_line_dict: OrderedDict[str, Any] = self.parse_logic.parse_line(line)
+                    parsed_line_dict: OrderedDict[str, Any] = (
+                        self.parse_logic.parse_line(line)
+                    )
                     logger.info(
                         f"Parsed line: {parsed_line_dict['operation']}, {parsed_line_dict['address']}, {parsed_line_dict['value']}"
                     )
