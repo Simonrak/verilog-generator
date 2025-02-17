@@ -19,20 +19,20 @@ class MMIOParseLogic(BaseModel):
     """
 
     @staticmethod
-    def last_char_to_shift_amount(
-        addr_hex: str,
-        last_char: str,
+    def address_offset_shift(
+        address: str,
+        offset: str,
     ) -> list[tuple[str, int]]:
-        """Convert hex address last character to base address and shift amount."""
-        char_to_base_map: dict[str, str] = {
-            c: b
-            for b, chars in {
+        """Convert offset addresses to base address."""
+        offset_to_base: dict[str, str] = {
+            offset: base
+            for base, offset in {
                 "0": "1230",
                 "4": "5674",
                 "8": "9ab8",
                 "c": "defc",
             }.items()
-            for c in chars
+            for offset in offset
         }
 
         shift_map: dict[int, str] = {
@@ -42,26 +42,23 @@ class MMIOParseLogic(BaseModel):
             24: "37bf",
         }
 
-        last_char = last_char.lower()
-        base_char = char_to_base_map.get(last_char)
+        offset = offset.lower()
+        base = offset_to_base.get(offset)
 
-        if not base_char:
-            return [(addr_hex, 0)]
-
-        base_addr = f"{addr_hex[:-1]}{base_char}"
-        shift = next((k for k, v in shift_map.items() if last_char in v), 0)
+        base_addr = f"{address[:-1]}{base}"
+        shift = next((k for k, v in shift_map.items() if offset in v), 0)
 
         return [(base_addr, shift)]
 
     @classmethod
-    def align_address_and_value(
+    def align_register_to_offset(
         cls,
-        addr: str,
+        address: str,
         value: str,
     ) -> tuple[str, str]:
-        """Aligns byte value based on address position."""
-        last_char = addr[-1]
-        base_addr, shift_amount = cls.last_char_to_shift_amount(addr[2:], last_char)[0]
+        """Aligns register value based on address offset."""
+        last_char = address[-1]
+        base_addr, shift_amount = cls.address_offset_shift(address[2:], last_char)[0]
         value_int = int(value, 16)
         hex_value = f"{(value_int << shift_amount) & 0xFFFFFFFF:08x}"
         return base_addr, hex_value
@@ -93,7 +90,11 @@ class MMIOParseLogic(BaseModel):
         return line.strip().startswith("R")
 
     @staticmethod
-    def bar_number(parts: list[str], base_addr: str, value: str) -> int:
+    def bar_number(
+        parts: list[str],
+        base_addr: str,
+        value: str,
+    ) -> int:
         """Get the bar number from line parts with base address and value validation."""
         return int(parts[3])
 
@@ -114,16 +115,17 @@ class MMIOParseLogic(BaseModel):
         return parts
 
     @staticmethod
-    def process_address(address_hex: str) -> tuple[str, str, int]:
+    def process_address(address: str) -> tuple[str, str, int]:
         """Process address to get base address and shift amount."""
-        address = address_hex[2:]
+        address = address[2:]
         if len(address) < 1:
-            raise ValueError(f"Invalid address format: {address_hex}")
+            raise ValueError(f"Invalid address format: {address}")
 
         last_char = address[-1]
-        base_addr, shift_amount = MMIOParseLogic.last_char_to_shift_amount(
+        base_addr, shift_amount = MMIOParseLogic.address_offset_shift(
             address, last_char
         )[0]
+
         return base_addr, address, shift_amount
 
     @staticmethod
@@ -146,23 +148,31 @@ class MMIOParseLogic(BaseModel):
                     ("value", value),
                 ]
             )
+
         except (ValueError, IndexError) as e:
             raise ValueError(f"Error creating MMIO data: {str(e)}")
 
     @staticmethod
-    def parse_line(
-        line: str,
-    ) -> OrderedDict[str, Any]:
+    def parse_line(line: str) -> OrderedDict[str, Any]:
         """Parse a valid line into its components."""
         parts = MMIOParseLogic.validate_line_format(line)
         operation = "W" if MMIOParseLogic.is_write(line) else "R"
 
         base_addr, address, shift_amount = MMIOParseLogic.process_address(parts[4])
-        bar = MMIOParseLogic.bar_number(parts, base_addr, parts[5])
-        aligned_address, shifted_value = MMIOParseLogic.align_address_and_value(
-            parts[4], parts[5]
+        bar = MMIOParseLogic.bar_number(
+            parts,
+            base_addr,
+            parts[5],
+        )
+        aligned_address, shifted_value = MMIOParseLogic.align_register_to_offset(
+            parts[4],
+            parts[5],
         )
 
         return MMIOParseLogic.create_mmio_data(
-            parts, operation, bar, aligned_address, shifted_value
+            parts,
+            operation,
+            bar,
+            aligned_address,
+            shifted_value,
         )
