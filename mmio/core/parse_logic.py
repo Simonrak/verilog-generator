@@ -20,68 +20,45 @@ class MMIOParseLogic(BaseModel):
 
     @staticmethod
     def last_char_to_shift_amount(
-        addr_hex: str, last_char: str
+        addr_hex: str,
+        last_char: str,
     ) -> list[tuple[str, int]]:
-        """Calculate base address and shift amount based on last character of address.
+        """Convert hex address last character to base address and shift amount."""
+        char_to_base_map: dict[str, str] = {
+            c: b
+            for b, chars in {
+                "0": "1230",
+                "4": "5674",
+                "8": "9ab8",
+                "c": "defc",
+            }.items()
+            for c in chars
+        }
 
-        Args:
-        addr_hex: Hex address string
-        last_char: Last character of address
+        shift_map: dict[int, str] = {
+            0: "048c",
+            8: "159d",
+            16: "26ae",
+            24: "37bf",
+        }
 
-        Returns:
-        Tuple of base address and shift amount
-
-        """
         last_char = last_char.lower()
+        base_char = char_to_base_map.get(last_char)
 
-        if last_char in "1230":
-            base_addr: str = addr_hex[:-1] + "0"
-            if last_char == "0":
-                return [(base_addr, 0)]
-            elif last_char == "1":
-                return [(base_addr, 8)]
-            elif last_char == "2":
-                return [(base_addr, 16)]
-            elif last_char == "3":
-                return [(base_addr, 24)]
+        if not base_char:
+            return [(addr_hex, 0)]
 
-        elif last_char in "5674":
-            base_addr = addr_hex[:-1] + "4"
-            if last_char == "4":
-                return [(base_addr, 0)]
-            elif last_char == "5":
-                return [(base_addr, 8)]
-            elif last_char == "6":
-                return [(base_addr, 16)]
-            elif last_char == "7":
-                return [(base_addr, 24)]
+        base_addr = f"{addr_hex[:-1]}{base_char}"
+        shift = next((k for k, v in shift_map.items() if last_char in v), 0)
 
-        elif last_char in "9ab8":
-            base_addr = addr_hex[:-1] + "8"
-            if last_char == "8":
-                return [(base_addr, 0)]
-            elif last_char == "9":
-                return [(base_addr, 8)]
-            elif last_char == "a":
-                return [(base_addr, 16)]
-            elif last_char == "b":
-                return [(base_addr, 24)]
-
-        elif last_char in "defc":
-            base_addr = addr_hex[:-1] + "c"
-            if last_char == "c":
-                return [(base_addr, 0)]
-            elif last_char == "d":
-                return [(base_addr, 8)]
-            elif last_char == "e":
-                return [(base_addr, 16)]
-            elif last_char == "f":
-                return [(base_addr, 24)]
-
-        return [(addr_hex, 0)]
+        return [(base_addr, shift)]
 
     @classmethod
-    def align_address_and_value(cls, addr: str, value: str) -> tuple[str, str]:
+    def align_address_and_value(
+        cls,
+        addr: str,
+        value: str,
+    ) -> tuple[str, str]:
         """Aligns byte value based on address position."""
         last_char = addr[-1]
         base_addr, shift_amount = cls.last_char_to_shift_amount(addr[2:], last_char)[0]
@@ -121,8 +98,8 @@ class MMIOParseLogic(BaseModel):
         return int(parts[3])
 
     @staticmethod
-    def parse_line(line: str) -> OrderedDict[str, Any]:
-        """Parse a valid line into its components."""
+    def validate_line_format(line: str) -> list[str]:
+        """Validate line format and split into parts."""
         if not MMIOParseLogic.is_valid_line(line):
             raise ValueError("Invalid line format - must start with W or R")
 
@@ -130,24 +107,34 @@ class MMIOParseLogic(BaseModel):
         if len(parts) != 8:
             raise ValueError("Invalid line format - expected 8 fields")
 
-        operation = "W" if MMIOParseLogic.is_write(line) else "R"
-        address = parts[4][2:]
+        for hex_value in [parts[4], parts[5]]:
+            if not MMIOParseLogic.is_valid_hex(hex_value):
+                raise ValueError(f"Invalid hex value: {hex_value}")
+
+        return parts
+
+    @staticmethod
+    def process_address(address_hex: str) -> tuple[str, str, int]:
+        """Process address to get base address and shift amount."""
+        address = address_hex[2:]
         if len(address) < 1:
-            raise ValueError(f"Invalid address format: {parts[4]}")
+            raise ValueError(f"Invalid address format: {address_hex}")
 
         last_char = address[-1]
         base_addr, shift_amount = MMIOParseLogic.last_char_to_shift_amount(
             address, last_char
         )[0]
-        bar = MMIOParseLogic.bar_number(parts, base_addr, parts[5])
-        aligned_address, shifted_value = MMIOParseLogic.align_address_and_value(
-            parts[4], parts[5]
-        )
+        return base_addr, address, shift_amount
 
-        for hex_value in [parts[4], parts[5]]:
-            if not MMIOParseLogic.is_valid_hex(hex_value):
-                raise ValueError(f"Invalid hex value: {hex_value}")
-
+    @staticmethod
+    def create_mmio_data(
+        parts: list[str],
+        operation: str,
+        bar: int,
+        address: str,
+        value: str,
+    ) -> OrderedDict[str, Any]:
+        """Create MMIO data dictionary from parsed components."""
         try:
             return OrderedDict(
                 [
@@ -155,9 +142,27 @@ class MMIOParseLogic(BaseModel):
                     ("counter", int(parts[1])),
                     ("timestamp", float(parts[2])),
                     ("bar_number", bar),
-                    ("address", aligned_address),
-                    ("value", shifted_value),
+                    ("address", address),
+                    ("value", value),
                 ]
             )
         except (ValueError, IndexError) as e:
-            raise ValueError(f"Error parsing line values: {str(e)}")
+            raise ValueError(f"Error creating MMIO data: {str(e)}")
+
+    @staticmethod
+    def parse_line(
+        line: str,
+    ) -> OrderedDict[str, Any]:
+        """Parse a valid line into its components."""
+        parts = MMIOParseLogic.validate_line_format(line)
+        operation = "W" if MMIOParseLogic.is_write(line) else "R"
+
+        base_addr, address, shift_amount = MMIOParseLogic.process_address(parts[4])
+        bar = MMIOParseLogic.bar_number(parts, base_addr, parts[5])
+        aligned_address, shifted_value = MMIOParseLogic.align_address_and_value(
+            parts[4], parts[5]
+        )
+
+        return MMIOParseLogic.create_mmio_data(
+            parts, operation, bar, aligned_address, shifted_value
+        )
