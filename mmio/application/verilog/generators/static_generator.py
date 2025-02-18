@@ -68,11 +68,11 @@ class StaticCodeGenerator(VerilogGenerator):
         self.save_header.write("\n")
         self.save_header.write("    assign local_read_addr = ({drd_req_addr[31:24], drd_req_addr[23:16],\n")
         self.save_header.write("                                drd_req_addr[15:8], drd_req_addr[7:0]} -\n")
-        self.save_header.write("                                (base_address_register & ~32'hFFF)) & 16'hFFFF;\n")
+        self.save_header.write("                                (base_address_register & ~32'hFFF)) & 20'hFFFFF;\n")
         self.save_header.write("\n")
         self.save_header.write("    assign local_write_addr = ({dwr_addr[31:24], dwr_addr[23:16],\n")
         self.save_header.write("                                dwr_addr[15:8], dwr_addr[7:0]} -\n")
-        self.save_header.write("                                (base_address_register & ~32'hFFF)) & 16'hFFFF;\n")
+        self.save_header.write("                                (base_address_register & ~32'hFFF)) & 20'hFFFFF;\n")
         self.save_header.write("\n\n")
 
         self.static_code.verilog_header = StringIO(self.save_header.getvalue())
