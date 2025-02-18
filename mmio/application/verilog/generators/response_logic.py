@@ -53,7 +53,7 @@ class ResponseLogicGenerator(VerilogGenerator):
 
             if count > 1:
                 counter_width = (count).bit_length()
-                sio.write(f"                    16'h{addr}: begin\n")
+                sio.write(f"                    20'h{addr}: begin\n")
                 sio.write(
                     f"                        {counter_name} <= ({counter_name} == {counter_width}'d{count - 1}) ? "
                 )
@@ -61,7 +61,7 @@ class ResponseLogicGenerator(VerilogGenerator):
                 sio.write(f"                        rd_rsp_data <= {rom_name}[{counter_name}];\n")
                 sio.write("                    end\n")
             else:
-                sio.write(f"                    16'h{addr}: rd_rsp_data <= {rom_name}[0];\n")
+                sio.write(f"                    20'h{addr}: rd_rsp_data <= {rom_name}[0];\n")
 
         sio.write(f"                    default: rd_rsp_data <= 32'h{default_value};\n")
         sio.write("                endcase\n")
@@ -94,7 +94,7 @@ class ResponseLogicGenerator(VerilogGenerator):
 
             if count > 1:
                 counter_width = (count).bit_length()
-                sio.write(f"                    16'h{addr}: begin\n")
+                sio.write(f"                    20'h{addr}: begin\n")
                 sio.write(
                     f"                        {counter_name} <= ({counter_name} == {counter_width}'d{count - 1}) ? "
                 )
@@ -102,7 +102,7 @@ class ResponseLogicGenerator(VerilogGenerator):
                 sio.write(f"                        {rom_name}[{counter_name}] <= dwr_data;\n")
                 sio.write("                    end\n")
             else:
-                sio.write(f"                    16'h{addr}: {rom_name}[0] <= dwr_data;\n")
+                sio.write(f"                    20'h{addr}: {rom_name}[0] <= dwr_data;\n")
 
         sio.write(f"                    default: wr_data_out <= 32'h{default_value};\n")
         sio.write("                endcase\n")
