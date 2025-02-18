@@ -7,10 +7,16 @@ This package generates Verilog code from MMIO logs.
 ### Run the script
 
 - run.bat will install the dependencies and create a .venv folder, and then run the script after activating the venv.
+---
 ![image](https://github.com/user-attachments/assets/17835f01-580a-41eb-8549-8776321082dd)
+
+---
 ![image](https://github.com/user-attachments/assets/fcbe3489-416b-4a09-aeed-8cecba06e45a)
+
+---
 ![image](https://github.com/user-attachments/assets/5ea2aa7b-a502-49ea-906e-0b13eac15c7f)
 
+---
 ### Adding your own generator and Verilog block
 
 - Make a new data class in `mmio/application/verilog/verilog_models.py` if you want to add a new type of Verilog "Entry class" (Your own read/write response logic, ROM, counter, etc).
